@@ -10,7 +10,6 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 
 import static org.bytedeco.javacpp.opencv_core.*;
-import static org.bytedeco.javacpp.opencv_imgcodecs.imwrite;
 import static org.bytedeco.javacpp.opencv_imgproc.*;
 
 /**
@@ -34,11 +33,13 @@ public class BID {
         BufferedImage bufferedImage = args.length >= 1 ? ImageIO.read(new File(args[0])) : ImageIO.read(this.getClass().getResourceAsStream("/images/scanblank.png"));
         System.out.println("Image type: " + bufferedImage.getType());
         // Convert BufferedImage to Mat
+        Rect rect = null;
         try (Mat matrix = new OpenCVFrameConverter.ToMat().convert(new Java2DFrameConverter().convert(bufferedImage));
-             Mat gray = new Mat()) {
+             Mat gray = new Mat();
+             Mat mean = new Mat();
+             Mat stddev = new Mat()) {
             cvtColor(matrix, gray, COLOR_BGR2GRAY);
-            Mat mean = new Mat();
-            Mat stddev = new Mat();
+
             showMatrix("gray", gray);
             meanStdDev(gray, mean, stddev);
             DoubleIndexer doubleIndexer = stddev.createIndexer();
@@ -47,23 +48,28 @@ public class BID {
             System.out.println(gray.cols() + " " + gray.rows());
             // remove approx 5% of image borders to get rid of scan artifacts
             int border = gray.cols() / 100 * 5;
-            Mat roi = gray.apply(new Rect(border, border, gray.cols() - border * 2, gray.rows() - border * 2));
+            rect = new Rect(border, border, gray.cols() - border * 2, gray.rows() - border * 2);
+            Mat roi = gray.apply(rect);
             showMatrix("roi", roi);
             meanStdDev(roi, mean, stddev);
             doubleIndexer = stddev.createIndexer();
-            double result = doubleIndexer.get(0, 0);
+            double result = doubleIndexer.get(0);
             System.out.println(result);
             doubleIndexer.release();
             System.out.println(border + " " + roi.cols() + " " + roi.rows());
             // if using 3 channels you get a result for every channel
-            //System.out.println(doubleIndexer.get(1, 0));
-            //System.out.println(doubleIndexer.get(2, 0));
+            //System.out.println(doubleIndexer.get(1));
+            //System.out.println(doubleIndexer.get(2));
             // the threshold is set on personal preference and experience
             double threshold = 1.5;
             if(result < threshold) {
                 System.out.println("Blank image!");
             } else {
                 System.out.println("Non blank image!");
+            }
+        } finally {
+            if(rect != null) {
+                rect.deallocate();
             }
         }
     }
